@@ -52,7 +52,7 @@ export function AppSidebar({
             className="flex items-center overflow-hidden px-1"
           >
             <span className="text-base font-semibold text-foreground">
-              Chatbot
+              Supervisor Chat
             </span>
           </Link>
         )}

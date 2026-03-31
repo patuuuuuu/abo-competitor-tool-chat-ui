@@ -1,9 +1,9 @@
 <a href="https://docs.databricks.com/aws/en/generative-ai/agent-framework/chat-app">
-  <h1 align="center">Databricks Agent Chat Template</h1>
+  <h1 align="center">Databricks Supervisor Chat Template</h1>
 </a>
 
 <p align="center">
-    A chat application template for interacting with Databricks Agent Serving endpoints, built with ExpressJS, React, Vercel AI SDK, Databricks authentication, and optional Lakebase (database) integration.
+    A chat application template for interacting with a Databricks Multi-Agent Supervisor endpoint, built with ExpressJS, React, Vercel AI SDK, Databricks authentication, and Lakebase-backed chat history.
 </p>
 
 <p align="center">
@@ -14,20 +14,22 @@
 </p>
 <br/>
 
-This template provides a fully functional chat app for custom code agents and Agent Bricks deployed on Databricks,
-but has some [known limitations](#known-limitations) for other use cases. Work is in progress on addressing these limitations.
+This template provides a fully functional supervisor chat app for Agent Bricks and custom agents deployed on Databricks.
+It is opinionated toward one custom chat UI that talks to a single Multi-Agent Supervisor endpoint, while preserving Databricks-native citations, tool parts, and OBO behavior.
 
 ## Features
 
-- **Databricks Agent and Foundation Model Integration**: Direct connection to Databricks Agent serving endpoints and Agent Bricks
+- **Databricks Multi-Agent Supervisor Integration**: Direct connection to a Databricks supervisor endpoint that can orchestrate Agent Bricks and custom agents
 - **Databricks Authentication**: Uses Databricks authentication to identify end users of the chat app and securely manage their conversations.
-- **Persistent Chat History (Optional)**: Leverages Databricks Lakebase (Postgres) for storing conversations, with governance and tight lakehouse integration. Can also run in ephemeral mode without database.
+- **Persistent Chat History**: Leverages Databricks Lakebase (Postgres) for storing conversations, with governance and tight lakehouse integration. The template ships with database resources enabled by default.
 - **User Feedback Collection (Optional)**: Thumbs up/down feedback on assistant messages, stored as MLflow assessments on the underlying traces. Requires an MLflow experiment resource to be configured.
 
 ## Prerequisites
 
-1. **Databricks serving endpoint**: you need access to a Databricks workspace containing the Agent Bricks or custom agent serving endpoint to chat with.
-2. **Set up Databricks authentication**
+1. **Databricks Multi-Agent Supervisor endpoint**: you need access to a Databricks workspace containing the supervisor serving endpoint you want the app to chat with.
+2. **Underlying Knowledge Assistant endpoint**: you also need the serving endpoint name for the Knowledge Assistant the supervisor orchestrates, so the app service principal can be granted `CAN_QUERY`.
+3. **Azure Databricks workspace URL**: for CLI authentication on Azure, you should know your workspace host, for example `https://adb-<workspace-id>.<region>.azuredatabricks.net`.
+4. **Set up Databricks authentication**
    - Install the latest version of the [Databricks CLI](https://docs.databricks.com/en/dev-tools/cli/install.html). On macOS, do this via:
    ```bash
    brew install databricks
@@ -38,7 +40,7 @@ but has some [known limitations](#known-limitations) for other use cases. Work i
      authentication. If desired, you can update this to a name of your choice, e.g. `dev_workspace`.
    ```bash
      export DATABRICKS_CONFIG_PROFILE='chatbot_template'
-     databricks auth login --profile "$DATABRICKS_CONFIG_PROFILE"
+     databricks auth login --host https://adb-<workspace-id>.<region>.azuredatabricks.net --profile "$DATABRICKS_CONFIG_PROFILE"
    ```
 
 ## Deployment
@@ -51,19 +53,21 @@ This project includes a [Databricks Asset Bundle (DAB)](https://docs.databricks.
    cd e2e-chatbot-app-next
    ```
 2. **Databricks authentication**: Ensure auth is configured as described in [Prerequisites](#prerequisites).
-3. **Specify serving endpoint and address TODOs in databricks.yml**: Address the TODOs in `databricks.yml`, setting the default value of `serving_endpoint_name` to the name of the custom code agent or Agent Bricks endpoint to chat with. The optional commented-out sections allow you to enable:
-   - **Persistent chat history** — uncomment the two optional `TODO` database blocks to provision and bind a Lakebase database. See [Database Modes](#database-modes) for details. **Tip:** run `./scripts/quickstart.sh` to do this automatically.
-   - **User feedback collection** — uncomment the optional `TODO` experiment block and set the experiment ID. Also requires a database (both database `TODO` blocks must be uncommented). See [Feedback Collection](#feedback-collection) for details. **Tip:** run `./scripts/quickstart.sh` to configure both database and feedback automatically.
+3. **Set the endpoint names in `databricks.yml`**:
+   - Update `serving_endpoint_name` to the name of the Multi-Agent Supervisor endpoint to chat with.
+   - Update `knowledge_assistant_endpoint_name` to the underlying Knowledge Assistant serving endpoint name.
+   - **Persistent chat history** is already enabled in the template via the bundled Lakebase database resource and binding.
+   - **User feedback collection** remains optional: uncomment the experiment block only if you want MLflow thumbs up/down feedback later.
 
    - NOTE: if using [Agent Bricks Multi-Agent Supervisor](https://docs.databricks.com/aws/en/generative-ai/agent-bricks/multi-agent-supervisor), you need to additionally grant the app service principal the `CAN_QUERY` permission on the underlying agent(s) that the MAS orchestrates. You can do this by adding those
-     agent serving endpoints as resources in `databricks.yml` (see the NOTE in `databricks.yml` on this)
+     agent serving endpoints as resources in `databricks.yml`. This template already wires the Knowledge Assistant endpoint and includes a commented example block for additional Genie or other agents.
 4. **Validate the bundle configuration**:
 
    ```bash
    databricks bundle validate
    ```
 
-5. **Deploy the bundle**. The first deployment may take several minutes for provisioning resources (especially if database is enabled), but subsequent deployments are fast:
+5. **Deploy the bundle**. The first deployment may take several minutes because it provisions the app and Lakebase database resources:
 
    ```bash
    databricks bundle deploy
@@ -72,12 +76,12 @@ This project includes a [Databricks Asset Bundle (DAB)](https://docs.databricks.
    This creates:
 
    - **App resource** ready to start
-   - **Lakebase database instance** (only if database resource is uncommented)
+   - **Lakebase database instance** for persistent supervisor chat history
 
 6. **Start the app**:
 
    ```bash
-   databricks bundle run databricks_chatbot
+   databricks bundle run databricks_supervisor_chat
    ```
 
 7. **View deployment summary** (useful for debugging deployment issues):
@@ -121,8 +125,8 @@ Use our automated quickstart script for the fastest setup experience:
    The quickstart script will:
    - **Install prerequisites** - Automatically installs jq, nvm, Node.js 20, and Databricks CLI
    - **Configure authentication** - Helps you select or create a Databricks CLI profile
-   - **Set up serving endpoint** - Prompts for your endpoint name and validates it exists
-   - **Database setup (optional)** - Choose persistent chat history or ephemeral mode
+   - **Set up serving endpoints** - Prompts for your Multi-Agent Supervisor endpoint name and the underlying Knowledge Assistant endpoint name, then validates both
+   - **Database setup** - Keeps persistent chat history enabled by default, with an option to fall back to ephemeral mode
    - **Deploy to Databricks (optional)** - Optionally deploys resources and provisions database
    - **Configure local environment** - Automatically creates and populates .env
    - **Run migrations** - Sets up database schema if database is enabled
@@ -165,6 +169,8 @@ If you prefer to configure the environment manually:
    ```
 
    Address the TODOs in `.env`, specifying your Databricks CLI profile and database connection details.
+   - `DATABRICKS_SERVING_ENDPOINT` should always be the supervisor endpoint name.
+   - The Knowledge Assistant endpoint is only needed in `databricks.yml` for deployed app permissions.
 
 3. **Run the application**:
 
@@ -176,7 +182,7 @@ If you prefer to configure the environment manually:
 
 ### Optional Chat UI Features
 
-The chat UI supports two optional features that can be enabled by updating `databricks.yml`:
+The chat UI supports persistent history by default and one optional feature that can be enabled later:
 
 ### User Feedback
 
@@ -188,7 +194,7 @@ Feedback is **disabled by default**. See [Feedback Collection](#feedback-collect
 
 ### Persistent Chat History
 
-By default, conversation messages are stored in memory and lost when the server restarts. To persist chat history across sessions, bind a Lakebase database in `databricks.yml`.
+The template binds a Lakebase database in `databricks.yml` by default so conversation history persists across sessions. You can still switch to ephemeral mode by removing database configuration locally or commenting out the database resources before deployment.
 
 See [Database Modes](#database-modes) for setup instructions.
 
@@ -218,8 +224,8 @@ The application can also run without a database. In this mode:
 
 #### Selecting a Database Mode
 
-The application will default to "Ephemeral mode" when no database environment variables are set.
-To run in persistent mode, ensure your environment contains the following database variables:
+The application falls back to "Ephemeral mode" when no database environment variables are set.
+To run in the default persistent mode locally, ensure your environment contains the following database variables:
 
 ```bash
 # Useful for local development
@@ -238,7 +244,7 @@ The app will detect the absence or precense of database configuration and automa
 
 #### Enabling Database After Installation
 
-If you initially installed the template without database support (ephemeral mode) and want to add persistent chat history later, you can re-run the quickstart script:
+If you switch the template to ephemeral mode and want to restore persistent chat history later, you can re-run the quickstart script:
 
 ```bash
 ./scripts/quickstart.sh
@@ -261,9 +267,9 @@ The script handles all configuration automatically, including:
 
 If you prefer to enable the database manually:
 
-1. **Edit `databricks.yml`** - Uncomment both database sections:
-   - Database instance resource (`chatbot_lakebase`) around line 18
-   - Database resource binding (`- name: database`) around line 41
+1. **Edit `databricks.yml`** - Ensure both database sections are enabled:
+   - Database instance resource (`supervisor_chat_lakebase`)
+   - Database resource binding (`- name: database`)
 
 2. **Deploy the database**:
    ```bash
@@ -288,7 +294,7 @@ If you prefer to enable the database manually:
 
 The chat app supports optional thumbs up/down feedback on assistant messages. When enabled, feedback is stored as [MLflow assessments](https://docs.databricks.com/aws/en/generative-ai/agent-framework/chat-app) on the traces emitted by your agent endpoint, making it easy to review and act on in the MLflow UI.
 
-Feedback is **disabled by default**. A "Feedback disabled" badge appears in the header when it is not configured.
+Feedback is **disabled by default** and the UI stays focused on the supervisor chat experience until you explicitly enable it.
 
 > **Note:** Feedback vote persistence (restoring thumbs up/down state on page reload) requires a database. Both features can be enabled together in one step using the quickstart script.
 
@@ -303,7 +309,7 @@ The easiest way to enable feedback (and persistent chat history) is to run the i
 The script automatically:
 1. Looks up the MLflow experiment ID linked to your serving endpoint
 2. Uncomments and configures the feedback `TODO` block in `databricks.yml` (setting `experiment_id`) and the `MLFLOW_EXPERIMENT_ID` env var in `app.yaml`
-3. Uncomments both database `TODO` blocks in `databricks.yml` to provision and bind a Lakebase database
+3. Reuses the existing database configuration in `databricks.yml` for vote persistence
 
 After the script completes, run `databricks bundle deploy` to apply the changes.
 
@@ -346,10 +352,10 @@ Uncomment the `MLFLOW_EXPERIMENT_ID` environment variable:
 
 ```bash
 databricks bundle deploy
-databricks bundle run databricks_chatbot
+databricks bundle run databricks_supervisor_chat
 ```
 
-Once deployed, the "Feedback disabled" badge disappears and the thumbs up/down buttons become active on assistant messages.
+Once deployed, the thumbs up/down buttons become active on assistant messages.
 
 ### Enabling feedback for local development
 
@@ -431,11 +437,11 @@ Make sure to install the latest version of the Databricks CLI (per [Prerequisite
 $ databricks bundle deploy
 Error: reference does not exist: ${workspace.current_user.domain_friendly_name}
 
-Name: databricks-chatbot
+Name: databricks_supervisor_chat
 Target: dev
 Workspace:
   User: user@company.com
-  Path: /Workspace/Users/user@company.com/.bundle/databricks-chatbot/dev
+  Path: /Workspace/Users/user@company.com/.bundle/databricks_supervisor_chat/dev
 ```
 
 ### "Resource not found" errors during databricks bundle deploy
@@ -445,14 +451,14 @@ deployed in your workspace:
 
 ```bash
 $ databricks bundle deploy
-Uploading bundle files to /Workspace/Users/user@company.com/.bundle/databricks-chatbot/dev/files...
+Uploading bundle files to /Workspace/Users/user@company.com/.bundle/databricks_supervisor_chat/dev/files...
 Deploying resources...
 Error: terraform apply: exit status 1
 
 Error: failed to update database_instance
 
-  with databricks_database_instance.chatbot_lakebase,
-  on bundle.tf.json line 45, in resource.databricks_database_instance.chatbot_lakebase:
+  with databricks_database_instance.supervisor_chat_lakebase,
+  on bundle.tf.json line 45, in resource.databricks_database_instance.supervisor_chat_lakebase:
   45:       }
 
 Resource not found
@@ -466,7 +472,7 @@ were manually created without using the `databricks bundle` CLI. To resolve this
 in your workspace and compare it to the bundle state using `databricks bundle summary`. If there is a mismatch,
 [see docs](https://docs.databricks.com/aws/en/dev-tools/bundles/faqs#can-i-port-existing-jobs-pipelines-dashboards-and-other-databricks-objects-into-my-bundle) on how to
 manually bind (if resources were manually created) or unbind (if resources were manually deleted) resources
-from your current bundle state. In the above example, the `chatbot_lakebase` database instance resource
+from your current bundle state. In the above example, the `supervisor_chat_lakebase` database instance resource
 was deployed via `databricks bundle deploy`, and then manually deleted. This broke subsequent deployments of the bundle
-(because bundle state indicated the resource should exist, but it did not in the workspace). Running `databricks bundle unbind chatbot_lakebase` updated bundle state to reflect the deletion of the instance,
+(because bundle state indicated the resource should exist, but it did not in the workspace). Running `databricks bundle unbind supervisor_chat_lakebase` updated bundle state to reflect the deletion of the instance,
 unblocking subsequent deployment of the bundle via `databricks bundle deploy`.

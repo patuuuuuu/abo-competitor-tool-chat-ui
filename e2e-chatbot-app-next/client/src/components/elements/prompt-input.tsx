@@ -39,7 +39,7 @@ export const PromptInputTextarea = forwardRef<
     {
       onChange,
       className,
-      placeholder = 'What would you like to know?',
+      placeholder = 'Ask the supervisor a question...',
       minHeight = 48,
       maxHeight = 164,
       disableAutoResize = false,

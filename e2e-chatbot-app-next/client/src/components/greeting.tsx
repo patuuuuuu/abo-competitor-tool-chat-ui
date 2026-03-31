@@ -10,9 +10,15 @@ export const Greeting = () => {
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
         exit={{ opacity: 0, y: 10 }}
-        className="font-semibold text-lg md:text-xl text-center"
+        className="space-y-3 text-center"
       >
-        What would you like to know?
+        <div className="font-semibold text-lg md:text-xl">
+          Ask the supervisor to route the request.
+        </div>
+        <p className="mx-auto max-w-2xl text-sm text-muted-foreground md:text-base">
+          One chat for Knowledge Assistant answers and Genie-backed analysis on
+          Databricks.
+        </p>
       </motion.div>
     </div>
   );

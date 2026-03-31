@@ -2,7 +2,7 @@
 set -e
 
 echo "==================================================================="
-echo "Starting Databricks Chatbot App"
+echo "Starting Databricks Supervisor Chat"
 echo "==================================================================="
 
 # Install dependencies
@@ -19,4 +19,3 @@ echo "  Backend:  http://localhost:3001"
 echo "-------------------------------------------------------------------"
 echo
 npm run dev
-

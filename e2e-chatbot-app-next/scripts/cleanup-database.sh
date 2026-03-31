@@ -3,7 +3,7 @@
 set -e
 
 echo "==================================================================="
-echo "Databricks Chatbot - Database Instance Cleanup"
+echo "Databricks Supervisor Chat - Database Instance Cleanup"
 echo "==================================================================="
 echo
 echo "This script helps you delete existing database instances that may"
@@ -148,8 +148,8 @@ echo "$INSTANCE_NAMES" | nl
 echo "-------------------------------------------------------------------"
 echo
 
-# Check for chatbot-related instances
-CHATBOT_INSTANCES=$(echo "$INSTANCE_NAMES" | grep -i "chatbot" || echo "")
+# Check for supervisor-chat-related instances
+CHATBOT_INSTANCES=$(echo "$INSTANCE_NAMES" | grep -Ei "supervisor-chat|chatbot" || echo "")
 
 if [ -n "$CHATBOT_INSTANCES" ]; then
     echo "Detected chatbot-related instances:"

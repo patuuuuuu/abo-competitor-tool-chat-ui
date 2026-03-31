@@ -80,6 +80,19 @@ const endpointDetailsCache = new Map<
 >();
 const ENDPOINT_DETAILS_CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
 
+function getScopesFromToken(token: string): string[] {
+  try {
+    const parts = token.split('.');
+    if (parts.length !== 3) return [];
+    const payload = JSON.parse(Buffer.from(parts[1], 'base64url').toString('utf-8'));
+    if (typeof payload.scope === 'string') return payload.scope.split(' ').sort();
+    if (Array.isArray(payload.scp)) return [...payload.scp].sort();
+    return [];
+  } catch {
+    return [];
+  }
+}
+
 /**
  * Checks if context should be injected based on cached endpoint details.
  * Returns true if API_PROXY is set or if the endpoint task type is agent/v2/chat or agent/v1/responses.
@@ -258,8 +271,15 @@ async function getOrCreateDatabricksProvider(): Promise<CachedProvider> {
       // downstream agent apps can also read it directly.
       const userToken = headers.get('x-forwarded-access-token');
       if (userToken) {
+        console.log(
+          '[providers-server] Using forwarded user token for serving request',
+          JSON.stringify({ scopes: getScopesFromToken(userToken) }),
+        );
         headers.set('Authorization', `Bearer ${userToken}`);
       } else {
+        console.log(
+          '[providers-server] No forwarded user token present; falling back to app auth',
+        );
         const currentToken = await getProviderToken();
         headers.set('Authorization', `Bearer ${currentToken}`);
       }

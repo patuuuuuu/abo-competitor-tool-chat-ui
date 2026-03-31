@@ -26,6 +26,11 @@ function getScopesFromToken(token: string): string[] {
   }
 }
 
+function summarizeTokenScopes(token: string | undefined): string[] {
+  if (!token) return [];
+  return getScopesFromToken(token).sort();
+}
+
 /**
  * GET /api/config - Get application configuration
  * Returns feature flags and OBO status based on environment configuration.
@@ -39,8 +44,8 @@ configRouter.get('/', async (req: Request, res: Response) => {
 
   // If the user has an OBO token, check which scopes are already present
   const userToken = req.headers['x-forwarded-access-token'] as string | undefined;
+  const tokenScopes = summarizeTokenScopes(userToken);
   if (userToken && oboInfo.isEndpointOboEnabled) {
-    const tokenScopes = getScopesFromToken(userToken);
     // A required scope like "sql.statement-execution" is satisfied by
     // an exact match OR by its parent prefix (e.g. "sql")
     missingScopes = oboInfo.endpointRequiredScopes.filter(required => {
@@ -48,6 +53,16 @@ configRouter.get('/', async (req: Request, res: Response) => {
       return !tokenScopes.some(ts => ts === required || ts === parent);
     });
   }
+
+  console.log(
+    '[config] OBO diagnostics:',
+    JSON.stringify({
+      hasUserToken: Boolean(userToken),
+      tokenScopes,
+      endpointRequiredScopes: oboInfo.endpointRequiredScopes,
+      missingScopes,
+    }),
+  );
 
   res.json({
     features: {

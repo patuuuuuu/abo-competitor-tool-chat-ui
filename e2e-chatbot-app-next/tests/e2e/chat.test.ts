@@ -32,6 +32,17 @@ test.describe('Chat activity', () => {
     expect(assistantMessage.content || '').not.toEqual('');
   });
 
+  test('Shows supervisor-specific landing copy', async () => {
+    await expect(
+      chatPage.page.getByText('Ask the supervisor to route the request.'),
+    ).toBeVisible();
+    await expect(
+      chatPage.page.getByText(
+        'One chat for Knowledge Assistant answers and Genie-backed analysis on Databricks.',
+      ),
+    ).toBeVisible();
+  });
+
   test('Toggle between send/stop button based on activity', async () => {
     await expect(chatPage.sendButton).toBeVisible();
     await expect(chatPage.sendButton).toBeDisabled();

@@ -13,6 +13,7 @@ test.describe('/api/config', () => {
     expect(typeof data.features.chatHistory).toBe('boolean');
     expect(data.features).toHaveProperty('feedback');
     expect(typeof data.features.feedback).toBe('boolean');
+    expect(data.features.feedback).toBe(false);
 
     if (process.env.TEST_MODE === 'with-db') {
       // In the test environment with database configured, chatHistory should be true

@@ -61,7 +61,9 @@ export class ChatPage {
 
   async sendUserMessageFromSuggestion() {
     await this.page
-      .getByRole('button', { name: 'How can you help me?' })
+      .getByRole('button', {
+        name: 'Summarize the latest context on our onboarding process',
+      })
       .click();
   }
 

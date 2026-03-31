@@ -23,7 +23,7 @@ get_current_bundle_name() {
 get_current_app_name() {
     if [ -f "databricks.yml" ]; then
         # Look for the name field under apps section (6 spaces indent)
-        awk '/^  apps:$/ {found=1} found && /^      name:/ {gsub(/^      name: /, ""); gsub(/\$\{var\.resource_name_suffix\}/, ""); gsub(/db-chatbot-/, ""); print; exit}' databricks.yml
+        awk '/^  apps:$/ {found=1} found && /^      name:/ {gsub(/^      name: /, ""); gsub(/\$\{var\.resource_name_suffix\}/, ""); gsub(/db-supervisor-chat-/, ""); gsub(/db-chatbot-/, ""); print; exit}' databricks.yml
     fi
 }
 
@@ -41,8 +41,8 @@ is_feedback_enabled() {
 # Helper function to check if database is enabled in databricks.yml
 is_database_enabled() {
     if [ -f "databricks.yml" ]; then
-        # Check if database_instances.chatbot_lakebase is uncommented (line starts with spaces, not # )
-        if grep -q "^    chatbot_lakebase:" databricks.yml; then
+        # Check if a database instance resource is uncommented (line starts with spaces, not # )
+        if grep -q "^    supervisor_chat_lakebase:$" databricks.yml || grep -q "^    chatbot_lakebase:$" databricks.yml; then
             return 0  # Database is enabled
         fi
     fi
@@ -88,7 +88,7 @@ prompt_yes_no() {
 }
 
 echo "==================================================================="
-echo "Databricks Chatbot App - Quickstart Setup"
+echo "Databricks Supervisor Chat - Quickstart Setup"
 echo "==================================================================="
 echo
 
@@ -353,7 +353,7 @@ echo "Setting up Application Configuration..."
 
 # 1. Serving Endpoint
 DEFAULT_ENDPOINT="databricks-claude-sonnet-4"
-echo "Enter the name of your Databricks Serving Endpoint (Agent Bricks or custom agent)"
+echo "Enter the name of your Databricks Multi-Agent Supervisor serving endpoint"
 echo "Press Enter to use default: $DEFAULT_ENDPOINT"
 read -r SERVING_ENDPOINT
 
@@ -402,11 +402,43 @@ else
     echo "✓ Endpoint found and validated"
 fi
 
-# Update databricks.yml with serving endpoint
-if [[ "$OSTYPE" == "darwin"* ]]; then
-    sed -i '' 's/# default: "your-serving-endpoint-name-goes-here"/default: "'"$SERVING_ENDPOINT"'"/' databricks.yml
+# 1b. Knowledge Assistant Endpoint
+echo
+echo "Enter the name of the underlying Knowledge Assistant serving endpoint"
+read -r KNOWLEDGE_ASSISTANT_ENDPOINT
+
+if [ -z "$KNOWLEDGE_ASSISTANT_ENDPOINT" ]; then
+    echo "❌ Error: Knowledge Assistant endpoint name is required for supervisor deployments."
+    exit 1
+fi
+
+echo "Checking if endpoint '$KNOWLEDGE_ASSISTANT_ENDPOINT' exists..."
+set +e
+KA_ENDPOINT_CHECK=$(databricks serving-endpoints get "$KNOWLEDGE_ASSISTANT_ENDPOINT" --profile "$PROFILE_NAME" 2>/dev/null)
+KA_ENDPOINT_EXISTS=$?
+set -e
+
+if [ $KA_ENDPOINT_EXISTS -ne 0 ]; then
+    echo
+    echo "⚠️  Warning: Endpoint '$KNOWLEDGE_ASSISTANT_ENDPOINT' could not be found in your workspace."
+    echo
+    if prompt_yes_no "Do you want to proceed with '$KNOWLEDGE_ASSISTANT_ENDPOINT' anyway?" "N"; then
+        echo "Proceeding with '$KNOWLEDGE_ASSISTANT_ENDPOINT'..."
+    else
+        echo "Please re-run the script with the correct Knowledge Assistant endpoint name."
+        exit 1
+    fi
 else
-    sed -i 's/# default: "your-serving-endpoint-name-goes-here"/default: "'"$SERVING_ENDPOINT"'"/' databricks.yml
+    echo "✓ Knowledge Assistant endpoint found and validated"
+fi
+
+# Update databricks.yml with serving endpoints
+if [[ "$OSTYPE" == "darwin"* ]]; then
+    sed -i '' '/^  serving_endpoint_name:$/,/^  database_instance_name:$/ s|^    default: .*|    default: "'"$SERVING_ENDPOINT"'"|' databricks.yml
+    sed -i '' '/^  knowledge_assistant_endpoint_name:$/,/^  database_instance_name:$/ s|^    default: .*|    default: "'"$KNOWLEDGE_ASSISTANT_ENDPOINT"'"|' databricks.yml
+else
+    sed -i '/^  serving_endpoint_name:$/,/^  database_instance_name:$/ s|^    default: .*|    default: "'"$SERVING_ENDPOINT"'"|' databricks.yml
+    sed -i '/^  knowledge_assistant_endpoint_name:$/,/^  database_instance_name:$/ s|^    default: .*|    default: "'"$KNOWLEDGE_ASSISTANT_ENDPOINT"'"|' databricks.yml
 fi
 
 # Update .env with serving endpoint
@@ -419,7 +451,7 @@ if grep -q "DATABRICKS_SERVING_ENDPOINT=" .env; then
 else
     echo "DATABRICKS_SERVING_ENDPOINT=$SERVING_ENDPOINT" >> .env
 fi
-echo "✓ Serving endpoint configured"
+echo "✓ Supervisor and Knowledge Assistant endpoints configured"
 
 # 2. Feedback Widget Configuration (within Section 4)
 echo
@@ -445,7 +477,7 @@ else
         echo "✓ Found MLflow experiment (ID: $EXPERIMENT_ID) linked to '$SERVING_ENDPOINT'."
         echo
 
-        if prompt_yes_no "Do you want to enable the feedback widget?" "Y"; then
+        if prompt_yes_no "Do you want to enable the feedback widget?" "N"; then
             # Update .env
             if grep -q "MLFLOW_EXPERIMENT_ID=" .env; then
                 if [[ "$OSTYPE" == "darwin"* ]]; then
@@ -507,7 +539,7 @@ else
     DOMAIN_FRIENDLY=$(echo "$USERNAME" | cut -d'@' -f1 | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/-/g')
 fi
 
-DEFAULT_APP_NAME="db-chatbot-dev-$DOMAIN_FRIENDLY"
+DEFAULT_APP_NAME="db-supervisor-chat-dev-$DOMAIN_FRIENDLY"
 DEFAULT_APP_NAME_LEN=${#DEFAULT_APP_NAME}
 MAX_LEN=30
 
@@ -522,11 +554,11 @@ EXISTING_BUNDLE_NAME=$(get_current_bundle_name)
 EXISTING_APP_NAME_RAW=$(get_current_app_name)
 
 # Check if custom names are already configured
-if [ -n "$EXISTING_BUNDLE_NAME" ] && [ "$EXISTING_BUNDLE_NAME" != "databricks_chatbot" ]; then
+if [ -n "$EXISTING_BUNDLE_NAME" ] && [ "$EXISTING_BUNDLE_NAME" != "databricks_supervisor_chat" ]; then
     # Custom configuration detected
     echo "✓ Detected existing custom configuration:"
     echo "  Bundle name: $EXISTING_BUNDLE_NAME"
-    echo "  App name pattern: db-chatbot-\${var.resource_name_suffix}"
+    echo "  App name pattern: db-supervisor-chat-\${var.resource_name_suffix}"
     echo
     echo "Note: App/bundle names cannot be changed after first deployment."
     echo "Continuing with existing configuration..."
@@ -534,11 +566,11 @@ if [ -n "$EXISTING_BUNDLE_NAME" ] && [ "$EXISTING_BUNDLE_NAME" != "databricks_ch
     FINAL_APP_NAME="$DEFAULT_APP_NAME"  # Will use default since we can't easily extract the resolved name
 elif [ -n "$EXISTING_BUNDLE_NAME" ]; then
     # Default configuration detected
-    echo "Detected default configuration (bundle name: databricks_chatbot)"
+    echo "Detected default configuration (bundle name: databricks_supervisor_chat)"
     echo "Default app name: $DEFAULT_APP_NAME (${#DEFAULT_APP_NAME} chars)"
     echo
 
-    BUNDLE_NAME="databricks_chatbot"  # Default
+    BUNDLE_NAME="databricks_supervisor_chat"  # Default
     FINAL_APP_NAME="$DEFAULT_APP_NAME"  # Will be updated if customized
 
     if prompt_yes_no "Do you want to customize these names?" "N"; then
@@ -633,7 +665,7 @@ elif [ -n "$EXISTING_BUNDLE_NAME" ]; then
     else
         echo "Using default names"
         # Still need to ensure the default name is valid
-        if [ "$DEFAULT_APP_NAME" != "db-chatbot-dev-$DOMAIN_FRIENDLY" ]; then
+        if [ "$DEFAULT_APP_NAME" != "db-supervisor-chat-dev-$DOMAIN_FRIENDLY" ]; then
             echo "Note: Default app name was truncated to meet $MAX_LEN character limit"
         fi
     fi
@@ -641,7 +673,7 @@ else
     # If no existing bundle name found (shouldn't happen, but handle gracefully)
     echo "Warning: Could not detect existing bundle configuration"
     echo "Using default names"
-    BUNDLE_NAME="databricks_chatbot"
+    BUNDLE_NAME="databricks_supervisor_chat"
     FINAL_APP_NAME="$DEFAULT_APP_NAME"
 fi
 
@@ -653,7 +685,7 @@ echo "----------------------"
 # Calculate the database instance name that will be used
 USERNAME=$(databricks auth describe --profile "$PROFILE_NAME" --output json 2>/dev/null | jq -r '.username')
 DOMAIN_FRIENDLY=$(echo "$USERNAME" | cut -d'@' -f1 | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/-/g')
-CALCULATED_DB_INSTANCE_NAME="chatbot-lakebase-dev-$DOMAIN_FRIENDLY"
+CALCULATED_DB_INSTANCE_NAME="supervisor-chat-lakebase-dev-$DOMAIN_FRIENDLY"
 
 # Check if database is already enabled
 if is_database_enabled; then
@@ -694,6 +726,7 @@ if is_database_enabled; then
 
             # Comment out database sections
             if [[ "$OSTYPE" == "darwin"* ]]; then
+                sed -i '' '/^ *supervisor_chat_lakebase:/s/^    /    # /' databricks.yml
                 sed -i '' '/^ *chatbot_lakebase:/s/^    /    # /' databricks.yml
                 sed -i '' '/^ *name: \${var.database_instance_name}/s/^    /    # /' databricks.yml
                 sed -i '' '/^ *capacity: CU_1/s/^    /    # /' databricks.yml
@@ -704,6 +737,7 @@ if is_database_enabled; then
                 sed -i '' '/^ *instance_name: \${resources/s/^        /        # /' databricks.yml
                 sed -i '' '/^ *permission: CAN_CONNECT/s/^        /        # /' databricks.yml
             else
+                sed -i '/^ *supervisor_chat_lakebase:/s/^    /    # /' databricks.yml
                 sed -i '/^ *chatbot_lakebase:/s/^    /    # /' databricks.yml
                 sed -i '/^ *name: \${var.database_instance_name}/s/^    /    # /' databricks.yml
                 sed -i '/^ *capacity: CU_1/s/^    /    # /' databricks.yml
@@ -778,7 +812,8 @@ else
     
     # Uncomment database sections in databricks.yml
     if [[ "$OSTYPE" == "darwin"* ]]; then
-        # Section 1: Uncomment database_instances.chatbot_lakebase
+        # Section 1: Uncomment database_instances.supervisor_chat_lakebase
+        sed -i '' '/# supervisor_chat_lakebase:/s/^    # /    /' databricks.yml
         sed -i '' '/# chatbot_lakebase:/s/^    # /    /' databricks.yml
         sed -i '' '/#   name: \${var.database_instance_name}/s/^    # /    /' databricks.yml
         sed -i '' '/#   capacity: CU_1/s/^    # /    /' databricks.yml
@@ -792,6 +827,7 @@ else
         sed -i '' '/#     permission: CAN_CONNECT/s/^        # /        /' databricks.yml
     else
         # Linux sed syntax
+        sed -i '/# supervisor_chat_lakebase:/s/^    # /    /' databricks.yml
         sed -i '/# chatbot_lakebase:/s/^    # /    /' databricks.yml
         sed -i '/#   name: \${var.database_instance_name}/s/^    # /    /' databricks.yml
         sed -i '/#   capacity: CU_1/s/^    # /    /' databricks.yml
@@ -810,7 +846,8 @@ else
 
     # Comment out database sections in databricks.yml if they were previously uncommented
     if [[ "$OSTYPE" == "darwin"* ]]; then
-        # Section 1: Comment out database_instances.chatbot_lakebase
+        # Section 1: Comment out database_instances.supervisor_chat_lakebase
+        sed -i '' '/^ *supervisor_chat_lakebase:/s/^    /    # /' databricks.yml
         sed -i '' '/^ *chatbot_lakebase:/s/^    /    # /' databricks.yml
         sed -i '' '/^ *name: \${var.database_instance_name}/s/^    /    # /' databricks.yml
         sed -i '' '/^ *capacity: CU_1/s/^    /    # /' databricks.yml
@@ -824,6 +861,7 @@ else
         sed -i '' '/^ *permission: CAN_CONNECT/s/^        /        # /' databricks.yml
     else
         # Linux sed syntax
+        sed -i '/^ *supervisor_chat_lakebase:/s/^    /    # /' databricks.yml
         sed -i '/^ *chatbot_lakebase:/s/^    /    # /' databricks.yml
         sed -i '/^ *name: \${var.database_instance_name}/s/^    /    # /' databricks.yml
         sed -i '/^ *capacity: CU_1/s/^    /    # /' databricks.yml
@@ -837,7 +875,7 @@ else
     fi
 
     echo "⚠️  Note: If you previously deployed this app with a database, the database instance in Databricks is NOT deleted by this script."
-    echo "   To avoid costs, please manually delete the 'chatbot-lakebase' instance in your Databricks workspace if it's no longer needed."
+    echo "   To avoid costs, please manually delete the 'supervisor-chat-lakebase' instance in your Databricks workspace if it's no longer needed."
     fi
 fi
 
@@ -882,7 +920,7 @@ if [ "$USE_DATABASE" = true ]; then
     # Calculate instance name (logic mirrored from setup.sh)
     USERNAME=$(databricks auth describe --profile "$PROFILE_NAME" --output json 2>/dev/null | jq -r '.username')
     DOMAIN_FRIENDLY=$(echo "$USERNAME" | cut -d'@' -f1 | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/-/g')
-    DB_INSTANCE_NAME="chatbot-lakebase-dev-$DOMAIN_FRIENDLY"
+    DB_INSTANCE_NAME="supervisor-chat-lakebase-dev-$DOMAIN_FRIENDLY"
     
     echo "Instance name: $DB_INSTANCE_NAME"
     
@@ -1020,4 +1058,3 @@ echo "Or, to continue without persistent chat history:"
 echo "   - Edit databricks.yml and comment out the database sections"
 echo "   - Run: databricks bundle deploy --profile \"$PROFILE_NAME\""
 echo "==================================================================="
-

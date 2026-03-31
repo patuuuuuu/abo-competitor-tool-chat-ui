@@ -4,7 +4,7 @@ set -euo pipefail
 # Usage: ./get-pghost.sh [optional-db-instance-name]
 # Example:
 #   ./get-pghost.sh
-#   ./get-pghost.sh chatbot-lakebase-dev-otheruser
+#   ./get-pghost.sh supervisor-chat-lakebase-dev-otheruser
 
 if [[ $# -gt 0 ]]; then
   DB_INSTANCE_NAME="$1"
@@ -16,7 +16,7 @@ else
     tr '[:upper:]' '[:lower:]' |
     sed 's/[^a-z0-9]/-/g'
   )
-  DB_INSTANCE_NAME="chatbot-lakebase-dev-$DOMAIN_FRIENDLY_USERNAME"
+  DB_INSTANCE_NAME="supervisor-chat-lakebase-dev-$DOMAIN_FRIENDLY_USERNAME"
 fi
 
 PGHOST=$(databricks database get-database-instance "$DB_INSTANCE_NAME" | jq -r .read_write_dns)
