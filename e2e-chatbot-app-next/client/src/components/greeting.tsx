@@ -13,11 +13,10 @@ export const Greeting = () => {
         className="space-y-3 text-center"
       >
         <div className="font-semibold text-lg md:text-xl">
-          Ask the supervisor to route the request.
+          Ask a question.
         </div>
         <p className="mx-auto max-w-2xl text-sm text-muted-foreground md:text-base">
-          One chat for Knowledge Assistant answers and Genie-backed analysis on
-          Databricks.
+          One chat for document-based answers and deeper data analysis.
         </p>
       </motion.div>
     </div>

@@ -32,13 +32,13 @@ test.describe('Chat activity', () => {
     expect(assistantMessage.content || '').not.toEqual('');
   });
 
-  test('Shows supervisor-specific landing copy', async () => {
+  test('Shows landing copy for first-time users', async () => {
     await expect(
-      chatPage.page.getByText('Ask the supervisor to route the request.'),
+      chatPage.page.getByText('Ask a question.'),
     ).toBeVisible();
     await expect(
       chatPage.page.getByText(
-        'One chat for Knowledge Assistant answers and Genie-backed analysis on Databricks.',
+        'One chat for document-based answers and deeper data analysis.',
       ),
     ).toBeVisible();
   });

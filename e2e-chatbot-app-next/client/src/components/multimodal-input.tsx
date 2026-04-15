@@ -294,7 +294,7 @@ function PureMultimodalInput({
             <PromptInputTextarea
               data-testid="multimodal-input"
               ref={textareaRef}
-              placeholder="Ask the supervisor a question..."
+              placeholder="What would you like to know?"
               value={input}
               onChange={handleInput}
               minHeight={44}
@@ -327,8 +327,9 @@ function PureMultimodalInput({
       </div>
 
       <p className="-mt-2 text-center text-sm text-muted-foreground">
-        The supervisor may route your request to Knowledge Assistant or
-        Genie-backed analysis. Always review the accuracy of responses.
+        This chat may answer from available knowledge or run a deeper
+        analysis, depending on your request. Always review responses for
+        accuracy.
       </p>
 
       {messages.length === 0 &&
