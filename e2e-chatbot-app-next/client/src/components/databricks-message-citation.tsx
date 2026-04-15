@@ -97,8 +97,8 @@ const decodeDatabricksMessageCitationLink = (
 };
 
 // Creates a markdown link to the Databricks message citation.
-export const createDatabricksMessageCitationMarkdown = (part: SourcePart) =>
-  `[${part.title || part.url}](${encodeDatabricksMessageCitationLink(part)})`;
+export const createDatabricksMessageCitationMarkdown = (part: SourcePart, citationNumber?: number) =>
+  `[${citationNumber != null ? citationNumber : part.title || part.url}](${encodeDatabricksMessageCitationLink(part)})`;
 
 // Checks if the link is a Databricks message citation.
 const isDatabricksMessageCitationLink = (
@@ -119,7 +119,9 @@ const getCitationPageFromUrl = (url: string) => {
     }
 
     const hash = parsed.hash.replace(/^#/, '');
-    const hashParams = new URLSearchParams(hash);
+    // Strip Chrome's Text Fragment syntax (:~:text=...) before parsing
+    const cleanHash = hash.split(':~:')[0];
+    const hashParams = new URLSearchParams(cleanHash);
     const hashPage =
       hashParams.get('page') ||
       hashParams.get('pageNumber') ||
@@ -201,17 +203,25 @@ const isPdfCitation = ({ url, title }: EncodedCitationPayload) => {
 };
 
 const getPreviewUrl = (citation: EncodedCitationPayload) => {
+  const page = getCitationPage(citation);
+
+  // Use the HTML viewer endpoint for page-specific navigation
+  // Falls back to direct content endpoint if no page
+  if (page != null) {
+    const viewerUrl = new URL('/api/citations/viewer', window.location.origin);
+    viewerUrl.searchParams.set('url', citation.url);
+    if (citation.title) {
+      viewerUrl.searchParams.set('title', citation.title);
+    }
+    viewerUrl.searchParams.set('page', String(page));
+    return viewerUrl.toString();
+  }
+
   const previewUrl = new URL('/api/citations/content', window.location.origin);
   previewUrl.searchParams.set('url', citation.url);
   if (citation.title) {
     previewUrl.searchParams.set('title', citation.title);
   }
-
-  const page = getCitationPage(citation);
-  if (page != null) {
-    previewUrl.hash = `page=${page}`;
-  }
-
   return previewUrl.toString();
 };
 

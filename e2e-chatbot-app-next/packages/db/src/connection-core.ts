@@ -17,10 +17,10 @@ export interface DatabaseCredentials {
 
 /**
  * Get the database schema name to use
- * Hardcoded to ai_chatbot for consistency with drizzle-kit generate
+ * Hardcoded to ai_chatbot_app for consistency with drizzle-kit generate
  */
 export function getSchemaName(): string {
-  const schemaName = 'ai_chatbot';
+  const schemaName = 'ai_chatbot_app';
   console.log(`[getSchemaName] Using hardcoded schema: ${schemaName}`);
   return schemaName;
 }

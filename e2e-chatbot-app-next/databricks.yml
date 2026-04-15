@@ -2,12 +2,18 @@ bundle:
   name: databricks_supervisor_chat
 
 variables:
-  serving_endpoint_name:
-    description: "Name of the Databricks Multi-Agent Supervisor serving endpoint used by the app"
+  supervisor_endpoint_name:
+    description: "Serving endpoint for the Competitor AI Tool multi-agent supervisor"
     default: "mas-de5437cb-endpoint"
-  knowledge_assistant_endpoint_name:
-    description: "Name of the underlying Knowledge Assistant serving endpoint orchestrated by the supervisor"
+  errata_agent_endpoint_name:
+    description: "Serving endpoint for the Errata Agent knowledge assistant"
     default: "ka-d46573c3-endpoint"
+  datasheet_expert_endpoint_name:
+    description: "Serving endpoint for the Datasheet Expert knowledge assistant"
+    default: "ka-57c678e3-endpoint"
+  datasheet_structured_features_space_id:
+    description: "Genie space ID for Datasheet Structured Features"
+    default: "01f0c9d498d4156485d9a1b9fe802bf3"
   database_instance_name:
     description: "Base name of the Lakebase database instance"
     default: "supervisor-chat-lakebase"
@@ -25,34 +31,49 @@ resources:
       # NOTE: customize the app name here, if desired
       # Keep this base name short: final app name must be <= 30 chars.
       name: comp-ai-chat-ui-${var.resource_name_suffix}
-      description: "Supervisor chat application for Databricks Multi-Agent Supervisor endpoints"
+      description: "Chat application for the Competitor AI Tool multi-agent supervisor"
       source_code_path: .
       # Required for OBO user auth when querying serving endpoints from the app.
       user_api_scopes:
         - serving.serving-endpoints
       resources:
-        - name: serving-endpoint
-          description: "Databricks serving endpoint name for the Multi-Agent Supervisor"
+        - name: supervisor-endpoint
+          description: "Serving endpoint for the Competitor AI Tool multi-agent supervisor"
           # NOTE: If chatting with an Agent Bricks Multi-Agent Supervisor (https://docs.databricks.com/aws/en/generative-ai/agent-bricks/multi-agent-supervisor),
           # you need to additionally grant the app service principal the `CAN_QUERY` permission on the
           # underlying agent(s) that the MAS orchestrates. You can do this by adding those
           # agent serving endpoints as additional resources here.
           serving_endpoint:
-            name: ${var.serving_endpoint_name}
+            name: ${var.supervisor_endpoint_name}
             permission: CAN_QUERY
-        - name: knowledge-assistant-endpoint
-          description: "Underlying Knowledge Assistant endpoint queried by the supervisor"
+        - name: errata-agent-endpoint
+          description: "Serving endpoint for the Errata Agent knowledge assistant"
           serving_endpoint:
-            name: ${var.knowledge_assistant_endpoint_name}
+            name: ${var.errata_agent_endpoint_name}
             permission: CAN_QUERY
-        # Example additional resources for other underlying agents orchestrated by the supervisor.
-        # Uncomment and replace names as needed so the app service principal also has CAN_QUERY
-        # on the endpoints behind the supervisor.
-        # - name: genie-agent-endpoint
-        #   description: "Underlying Genie-backed endpoint queried by the supervisor"
-        #   serving_endpoint:
-        #     name: your-genie-agent-endpoint-name
-        #     permission: CAN_QUERY
+        - name: datasheet-expert-endpoint
+          description: "Serving endpoint for the Datasheet Expert knowledge assistant"
+          serving_endpoint:
+            name: ${var.datasheet_expert_endpoint_name}
+            permission: CAN_QUERY
+        - name: datasheet-structured-space
+          description: "Genie space for Datasheet Structured Features"
+          genie_space:
+            name: "Datasheet Structured Features"
+            space_id: ${var.datasheet_structured_features_space_id}
+            permission: CAN_RUN
+        - name: errata-pdfs-volume
+          description: "UC Volume for errata PDF citations — app-level access so all app users can preview citations"
+          uc_securable:
+            securable_full_name: analytics_prd.errata-agent.errata_current
+            securable_type: VOLUME
+            permission: READ_VOLUME
+        - name: datasheet-pdfs-volume
+          description: "UC Volume for datasheet PDF citations — app-level access so all app users can preview citations"
+          uc_securable:
+            securable_full_name: analytics_prd.aicontentscraper.dedup-pdfs
+            securable_type: VOLUME
+            permission: READ_VOLUME
         - name: database
           description: "Lakebase database instance for persistent supervisor chat history"
           database:
@@ -76,7 +97,7 @@ targets:
       host: https://adb-3617136126845024.4.azuredatabricks.net
       profile: competitor-ai-chat-ui
     variables:
-      resource_name_suffix: dev-${workspace.current_user.domain_friendly_name}
+      resource_name_suffix: dev-phnguyen2
 
   dev_obo2:
     mode: development

@@ -217,6 +217,38 @@ const isPdfLikeCitation = (citationUrl: URL, rawTitle: string | null) => {
 
   return rawTitle?.toLowerCase().endsWith('.pdf') ?? false;
 };
+/**
+ * GET /api/citations/viewer - Returns an HTML page that embeds the PDF with page navigation
+ */
+citationsRouter.get('/viewer', requireAuth, async (req: Request, res: Response) => {
+  const rawUrl = req.query.url;
+  const rawTitle = req.query.title;
+  const page = req.query.page;
+
+  if (typeof rawUrl !== 'string' || rawUrl.trim().length === 0) {
+    const error = new ChatSDKError('bad_request:api');
+    const response = error.toResponse();
+    return res.status(response.status).json(response.json);
+  }
+
+  const contentUrl = `/api/citations/content?url=${encodeURIComponent(rawUrl)}${
+    rawTitle ? `&title=${encodeURIComponent(rawTitle as string)}` : ''
+  }`;
+  const pageHash = page ? `#page=${page}` : '';
+
+  return res.type('html').send(`<!DOCTYPE html>
+<html>
+<head>
+<style>
+  html, body { margin: 0; padding: 0; height: 100%; overflow: hidden; }
+  embed { display: block; width: 100%; height: 100%; }
+</style>
+</head>
+<body>
+<embed src="${contentUrl}${pageHash}" type="application/pdf" />
+</body>
+</html>`);
+});
 
 citationsRouter.get('/content', requireAuth, async (req: Request, res: Response) => {
   try {
@@ -259,10 +291,7 @@ citationsRouter.get('/content', requireAuth, async (req: Request, res: Response)
     );
 
     if (citationUrl.hostname === workspaceHost) {
-      const token =
-        forwardedUserToken ||
-        authorizationBearerToken ||
-        (await getDatabricksToken());
+      const token = await getDatabricksToken();
       headers.set('Authorization', `Bearer ${token}`);
     }
 

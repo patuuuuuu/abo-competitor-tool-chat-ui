@@ -1,4 +1,4 @@
-import React, { memo, useState } from 'react';
+import React, { memo, useState, useMemo } from 'react';
 import { AnimatedAssistantIcon } from './animation-assistant-icon';
 import { Response } from './elements/response';
 import { MessageContent } from './elements/message';
@@ -22,7 +22,7 @@ import { PreviewAttachment } from './preview-attachment';
 import equal from 'fast-deep-equal';
 import { cn, sanitizeText } from '@/lib/utils';
 import { MessageEditor } from './message-editor';
-import { MessageReasoning } from './message-reasoning';
+import { MessageThinking, type ToolCallInfo } from './message-thinking';
 import { Shimmer } from './ui/shimmer';
 import type { UseChatHelpers } from '@ai-sdk/react';
 import type { ChatMessage, Feedback } from '@chat-template/core';
@@ -105,7 +105,55 @@ const PurePreviewMessage = ({
       ),
     [message.parts],
   );
+  // Pre-compute starting citation number for each segment
+  // so citations are numbered sequentially across the entire message
+  const citationStartNumbers = useMemo(() => {
+    const starts: number[] = [];
+    let counter = 1;
+    for (const segment of partSegments) {
+      starts.push(counter);
+      counter += segment.filter((p) => p.type === 'source-url').length;
+    }
+    return starts;
+  }, [partSegments]);
+// Pre-collect all thinking data (reasoning + tool calls) for unified rendering
+  const thinkingData = useMemo(() => {
+    const reasoningText = message.parts
+      .filter((p) => p.type === 'reasoning')
+      .map((p) => {
+        const text = (p as any).text as string | undefined;
+        return text?.trim() ? text : '';
+      })
+      .filter(Boolean)
+      .join('\n');
 
+    const toolCalls: ToolCallInfo[] = message.parts
+      .filter(
+        (p) =>
+          p.type === 'dynamic-tool' &&
+          !(p as any).callProviderMetadata?.databricks?.approvalRequestId,
+      )
+      .map((p) => {
+        const part = p as any;
+        const effectiveState =
+          part.providerExecuted && !isLoading && part.state === 'input-available'
+            ? ('output-available' as const)
+            : part.state;
+        return {
+          toolName: part.toolName,
+          state: effectiveState,
+          input: part.input,
+          output: part.output,
+          errorText: part.errorText,
+        };
+      });
+
+    return {
+      reasoning: reasoningText || undefined,
+      toolCalls,
+      hasContent: !!reasoningText || toolCalls.length > 0,
+    };
+  }, [message.parts, isLoading]);
   // Check if message only contains non-OAuth errors (no other content)
   const hasOnlyErrors = React.useMemo(() => {
     const nonErrorParts = message.parts.filter(
@@ -158,6 +206,13 @@ const PurePreviewMessage = ({
               ))}
             </div>
           )}
+{thinkingData.hasContent && (
+            <MessageThinking
+              isLoading={isLoading}
+              reasoning={thinkingData.reasoning}
+              toolCalls={thinkingData.toolCalls}
+            />
+          )}
 
           {partSegments?.map((parts, index) => {
             const [part] = parts;
@@ -165,13 +220,8 @@ const PurePreviewMessage = ({
             const key = `message-${message.id}-part-${index}`;
 
             if (type === 'reasoning' && part.text?.trim().length > 0) {
-              return (
-                <MessageReasoning
-                  key={key}
-                  isLoading={isLoading}
-                  reasoning={part.text}
-                />
-              );
+              // Handled by unified MessageThinking block above
+              return null;
             }
 
             if (type === 'text') {
@@ -196,7 +246,7 @@ const PurePreviewMessage = ({
                       })}
                     >
                       <Response>
-                        {sanitizeText(joinMessagePartSegments(parts))}
+                        {sanitizeText(joinMessagePartSegments(parts, citationStartNumbers[index]))}
                       </Response>
                     </MessageContent>
                   </div>
@@ -229,21 +279,15 @@ const PurePreviewMessage = ({
               const { toolCallId, input, state, errorText, output, toolName } =
                 part;
 
-              // Check if this is an MCP tool call by looking for approvalRequestId in metadata
-              // This works across all states (approval-requested, approval-denied, output-available)
               const isMcpApproval =
                 part.callProviderMetadata?.databricks?.approvalRequestId !=
                 null;
               const mcpServerName =
                 part.callProviderMetadata?.databricks?.mcpServerName?.toString();
 
-              // Extract approval outcome for 'approval-responded' state
-              // When addToolApprovalResponse is called, AI SDK sets the `approval` property
-              // on the tool-call part and changes state to 'approval-responded'
               const approved: boolean | undefined =
                 'approval' in part ? part.approval?.approved : undefined;
 
-              // When approved but only have approval status (not actual output), show as input-available
               const effectiveState: ToolState = (() => {
                 if (
                   part.providerExecuted &&
@@ -309,33 +353,8 @@ const PurePreviewMessage = ({
                 );
               }
 
-              // Render regular tool calls
-              return (
-                <Tool key={toolCallId} defaultOpen={true}>
-                  <ToolHeader type={toolName} state={effectiveState} />
-                  <ToolContent>
-                    <ToolInput input={input} />
-                    {state === 'output-available' && (
-                      <ToolOutput
-                        output={
-                          errorText ? (
-                            <div className="rounded border p-2 text-red-500">
-                              Error: {errorText}
-                            </div>
-                          ) : (
-                            <div className="whitespace-pre-wrap font-mono text-sm">
-                              {typeof output === 'string'
-                                ? output
-                                : JSON.stringify(output, null, 2)}
-                            </div>
-                          )
-                        }
-                        errorText={undefined}
-                      />
-                    )}
-                  </ToolContent>
-                </Tool>
-              );
+              // Regular tool calls - handled by unified thinking block
+              return null;
             }
 
             // Support for citations/annotations

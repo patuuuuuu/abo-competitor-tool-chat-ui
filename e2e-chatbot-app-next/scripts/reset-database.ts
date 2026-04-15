@@ -53,7 +53,7 @@ async function resetDatabase() {
   console.log('  • All user data');
   console.log('  • All messages');
   console.log('  • Drizzle migration history');
-  console.log('  • The entire ai_chatbot schema\n');
+  console.log('  • The entire ai_chatbot_app schema\n');
   console.log('This action CANNOT be undone!\n');
 
   const confirmed = await promptConfirmation(
@@ -71,14 +71,14 @@ async function resetDatabase() {
     const connectionUrl = await getConnectionUrl();
     const sql = postgres(connectionUrl);
 
-    // Drop the ai_chatbot schema cascade (includes all tables)
-    console.log('Dropping ai_chatbot schema if it exists...');
-    await sql`DROP SCHEMA IF EXISTS ai_chatbot CASCADE`;
+    // Drop the ai_chatbot_app schema cascade (includes all tables)
+    console.log('Dropping ai_chatbot_app schema if it exists...');
+    await sql`DROP SCHEMA IF EXISTS ai_chatbot_app CASCADE`;
     console.log('✅ Schema dropped');
 
-    // Drop drizzle migrations table from drizzle schema if it exists
-    await sql`DROP TABLE IF EXISTS drizzle.__drizzle_migrations CASCADE`;
-    console.log('✅ Drizzle schema migrations table dropped if existed');
+    // Drop the migration metadata table from the app schema if it exists
+    await sql`DROP TABLE IF EXISTS ai_chatbot_app.__drizzle_migrations CASCADE`;
+    console.log('✅ Migration metadata table dropped if existed');
 
     console.log(
       '\n✅ Database reset complete! All data and migrations removed.',

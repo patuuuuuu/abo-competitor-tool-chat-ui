@@ -62,21 +62,22 @@ export const formatNamePart = (part: ChatMessage['parts'][number]) => {
  * Takes a segment of parts and joins them into a markdown-formatted string.
  * Used to render citations as part of the associated text.
  */
-export const joinMessagePartSegments = (parts: ChatMessage['parts']) => {
+export const joinMessagePartSegments = (parts: ChatMessage['parts'], startingCitationNumber?: number) => {
+  let citationCounter = startingCitationNumber ?? 0;
+  const useNumbering = startingCitationNumber != null;
   return parts.reduce((acc, part) => {
     switch (part.type) {
       case 'text':
         return acc + part.text;
-      case 'source-url':
+      case 'source-url': {
+        const number = useNumbering ? citationCounter++ : undefined;
         console.log("acc.endsWith('|')", acc.endsWith('|'));
         // Special case for markdown tables
         if (acc.endsWith('|')) {
-          // 1. Remove the last pipe
-          // 2. Insert the citation markdown
-          // 3. Add the pipe back
-          return `${acc.slice(0, -1)} ${createDatabricksMessageCitationMarkdown(part)}|`;
+          return `${acc.slice(0, -1)} ${createDatabricksMessageCitationMarkdown(part, number)}|`;
         }
-        return `${acc} ${createDatabricksMessageCitationMarkdown(part)}`;
+        return `${acc} ${createDatabricksMessageCitationMarkdown(part, number)}`;
+      }
       default:
         return acc;
     }
