@@ -58,6 +58,14 @@ export const formatNamePart = (part: ChatMessage['parts'][number]) => {
   return part.text?.replace('<name>', '').replace('</name>', '');
 };
 
+export const getAgentDisplayName = (
+  technicalName: string,
+  isSupervisor: boolean,
+): string => {
+  void technicalName;
+  return isSupervisor ? 'Summary & Synthesis' : 'Data Retrieval';
+};
+
 /**
  * Takes a segment of parts and joins them into a markdown-formatted string.
  * Used to render citations as part of the associated text.

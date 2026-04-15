@@ -1,12 +1,7 @@
 import React, { memo, useState, useMemo } from 'react';
-import { AnimatedAssistantIcon } from './animation-assistant-icon';
 import { Response } from './elements/response';
 import { MessageContent } from './elements/message';
 import {
-  Tool,
-  ToolHeader,
-  ToolContent,
-  ToolInput,
   ToolOutput,
   type ToolState,
 } from './elements/tool';
@@ -29,7 +24,6 @@ import type { ChatMessage, Feedback } from '@chat-template/core';
 import { useDataStream } from './data-stream-provider';
 import {
   createMessagePartSegments,
-  formatNamePart,
   isNamePart,
   joinMessagePartSegments,
 } from './databricks-message-part-transformers';
@@ -37,7 +31,6 @@ import { createDatabricksMessageCitationMarkdown } from './databricks-message-ci
 import { MessageError } from './message-error';
 import { MessageOAuthError } from './message-oauth-error';
 import { isCredentialErrorMessage } from '@/lib/oauth-error-utils';
-import { Streamdown } from 'streamdown';
 import { useApproval } from '@/hooks/use-approval';
 
 const PurePreviewMessage = ({
@@ -116,7 +109,35 @@ const PurePreviewMessage = ({
     }
     return starts;
   }, [partSegments]);
-// Pre-collect all thinking data (reasoning + tool calls) for unified rendering
+
+  const {
+    lastNameIndex,
+    childSegments,
+    supervisorSegments,
+    childCitationStartNumbers,
+  } = useMemo(() => {
+    const index = partSegments.findLastIndex((segment) =>
+      isNamePart(segment[0]),
+    );
+
+    if (index >= 0) {
+      return {
+        lastNameIndex: index,
+        childSegments: partSegments.slice(0, index),
+        supervisorSegments: partSegments.slice(index),
+        childCitationStartNumbers: citationStartNumbers.slice(0, index),
+      };
+    }
+
+    return {
+      lastNameIndex: -1,
+      childSegments: [] as ChatMessage['parts'][],
+      supervisorSegments: partSegments,
+      childCitationStartNumbers: [] as number[],
+    };
+  }, [partSegments, citationStartNumbers]);
+
+  // Pre-collect all thinking data (reasoning + tool calls + child responses)
   const thinkingData = useMemo(() => {
     const reasoningText = message.parts
       .filter((p) => p.type === 'reasoning')
@@ -151,9 +172,13 @@ const PurePreviewMessage = ({
     return {
       reasoning: reasoningText || undefined,
       toolCalls,
-      hasContent: !!reasoningText || toolCalls.length > 0,
+      childSegments,
+      childCitationStartNumbers,
+      hasContent:
+        !!reasoningText || toolCalls.length > 0 || childSegments.length > 0,
     };
-  }, [message.parts, isLoading]);
+  }, [message.parts, isLoading, childSegments, childCitationStartNumbers]);
+
   // Check if message only contains non-OAuth errors (no other content)
   const hasOnlyErrors = React.useMemo(() => {
     const nonErrorParts = message.parts.filter(
@@ -206,15 +231,21 @@ const PurePreviewMessage = ({
               ))}
             </div>
           )}
-{thinkingData.hasContent && (
+          {thinkingData.hasContent && (
             <MessageThinking
               isLoading={isLoading}
               reasoning={thinkingData.reasoning}
               toolCalls={thinkingData.toolCalls}
+              childSegments={thinkingData.childSegments}
+              childCitationStartNumbers={thinkingData.childCitationStartNumbers}
             />
           )}
 
-          {partSegments?.map((parts, index) => {
+          {supervisorSegments?.map((parts, supervisorIndex) => {
+            const index =
+              lastNameIndex >= 0
+                ? lastNameIndex + supervisorIndex
+                : supervisorIndex;
             const [part] = parts;
             const { type } = part;
             const key = `message-${message.id}-part-${index}`;
@@ -226,12 +257,7 @@ const PurePreviewMessage = ({
 
             if (type === 'text') {
               if (isNamePart(part)) {
-                return (
-                  <Streamdown
-                    key={key}
-                    className="-mb-2 mt-0 border-l-4 pl-2 text-muted-foreground"
-                  >{`# ${formatNamePart(part)}`}</Streamdown>
-                );
+                return null;
               }
               if (mode === 'view') {
                 return (
@@ -239,7 +265,7 @@ const PurePreviewMessage = ({
                     <MessageContent
                       data-testid="message-content"
                       className={cn({
-                        'bg-secondary w-fit break-words rounded-2xl px-3 py-2 text-left text-base':
+                        'w-fit break-words rounded-2xl bg-secondary px-3 py-2 text-left text-base':
                           message.role === 'user',
                         'bg-transparent px-0 py-0 text-left text-base':
                           message.role === 'assistant',
